@@ -3,7 +3,7 @@ package XML::SemanticDiff;
 use strict;
 use vars qw/$VERSION/;
 
-$VERSION = '0.91';
+$VERSION = '0.93';
 
 use XML::Parser;
 use Digest::MD5;
@@ -354,17 +354,18 @@ The C<namespace_uri> method handles case where the XML namespace URI differs bet
 documents. Note that the namespace URI is checked, not the element prefixes since <foo:element/> <bar:element/> and <element/> 
 are all considered equivalent as long as they are bound to the same namespace URI.
  
+
 =head2 rogue_attribute($self, $attr_name, $element, $todoc_element_properties)
 
 The C<rogue_attribute> method handles those cases where an attribute exists in a given element the to-file but not in the
 from-file.
 
-=head2 missing_attribute($self, $attr_name, $element, $todoc_element_properties, $from_element_properties)
+=head2 missing_attribute($self, $attr_name, $element, $todoc_element_properties, $fromdoc_element_properties)
 
 The C<missing_attribute> method handles those cases where an attribute exists in a given element exists in the from-file but
 not in the to-file.
 
-=head2 attribute_value($self, $attr_name, $element, $todoc_element_properties, $from_element_properties)
+=head2 attribute_value($self, $attr_name, $element, $todoc_element_properties, $fromdoc_element_properties)
 
 The C<attribute_value> method handles those cases where the value of an attribute varies between the same element in both
 documents.
