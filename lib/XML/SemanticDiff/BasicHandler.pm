@@ -3,7 +3,7 @@ package XML::SemanticDiff::BasicHandler;
 use strict;
 use vars qw/$VERSION/;
 
-$VERSION = '0.50';
+$VERSION = '0.91';
 
 sub new {       
     my ($proto, %args) = @_;
@@ -99,8 +99,6 @@ sub missing_attribute {
         $info->{endline}   = $new_properties->{TagEnd};
     }
 
-    my @blarg = keys (%{$old_properties->{Attributes}});
-
     if ($self->{keepdata}) {
         $info->{old_value} = $old_properties->{Attributes}->{$attr};
     }
@@ -160,28 +158,36 @@ __END__
 
 =head1 NAME
 
-XML::SemanticDiff - Perl extension for blah blah blah
+XML::SemanticDiff::BasicHandler - Default handler class for XML::SemanticDiff
 
 =head1 SYNOPSIS
 
   use XML::SemanticDiff;
-  blah blah blah
+  my $diff = XML::SemanticDiff->new();
+        
+  foreach my $change ($diff->compare($file, $file2)) {
+      print "$change->{message} in context $change->{context}\n";
+  }
 
 =head1 DESCRIPTION
 
-Stub documentation for XML::SemanticDiff was created by h2xs. It looks like the
-author of the extension was negligent enough to leave the stub
-unedited.
+This is the default event handler for XML::SemanticDiff. It implements nothing useful apart from the parent class and should
+never be used directly.
 
-Blah blah blah.
+Please run perldoc XML::SemanticDiff for more information.
 
 =head1 AUTHOR
 
-A. U. Thor, a.u.thor@a.galaxy.far.far.away
+Kip Hampton khampton@totalcinema.com
+
+=head1 COPYRIGHT
+                  
+Copyright (c) 2000 Kip Hampton. All rights reserved. This program is free software; you can redistribute it and/or modify it
+under the same terms as Perl itself.
 
 =head1 SEE ALSO
 
-perl(1).
+XML::SemanticDiff
 
 =cut
 

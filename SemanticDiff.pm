@@ -3,7 +3,7 @@ package XML::SemanticDiff;
 use strict;
 use vars qw/$VERSION/;
 
-$VERSION = '0.50';
+$VERSION = '0.91';
 
 use XML::Parser;
 use Digest::MD5;
@@ -11,10 +11,7 @@ use Digest::MD5;
 sub new {
     my ($proto, %args) = @_;
     my $class = ref($proto) || $proto;
-    my $self  = { 'keepdata'       => $args{keepdata}       || undef,
-                  'keeplinenums'   => $args{keeplinenums}   || undef,
-                  'diffhandler'    => $args{diffhandler}    || undef
-                };
+    my $self = \%args;
 
     require XML::SemanticDiff::BasicHandler unless defined $args{diffhandler};
 
@@ -181,9 +178,7 @@ sub EndTag {
     }
          
     $test_context .= '/' . $element . '[' . $position_index->{$element} . ']';
-    
-    #warn "in end, test context is $test_context \n";
-        
+            
     my $text = delete $char_accumulator->{$element} || "";
     
     my $ctx = Digest::MD5->new;
@@ -200,7 +195,7 @@ sub EndTag {
         my $seen = {};
         foreach my $child (@{$descendents->{$element}}) {
             next if $seen->{$child};
-            #reset the relative counter
+            # reset the relative counter
             $position_index->{$child} = 0;
             $seen->{$child}++;
         }
@@ -257,11 +252,10 @@ sub PI {
 
 1;
 __END__
-# Below is the stub of documentation for your module. You better edit it!
 
 =head1 NAME
 
-XML::SemanticDiff - Perl extension for comparing XML documents' abstract structure and contents.
+XML::SemanticDiff - Perl extension for comparing XML documents.
 
 =head1 SYNOPSIS
 
@@ -323,15 +317,62 @@ Please see the section on 'CUSTOM HANDLERS' below.
 
 =head1 CUSTOM HANDLERS
 
-Internally, XML::SemanticDiff uses an event-based model somewhat reminscent of SAX2 where the various 'semantic diff events'
-are handed off to a seperate handler class to cope with the details. For most general cases where the user only cares about 
+Internally, XML::SemanticDiff uses an event-based model somewhat reminiscent of SAX where the various 'semantic diff events'
+are handed off to a separate handler class to cope with the details. For most general cases where the user only cares about 
 reporting the differences between two docs, the default handler, XML::SemanticDiff::BasicHandler, will probably  
 suffice. However, it is often desirable to add side-effects to the diff process (updating datastores, widget callbacks,  
 etc.) and a custom handler allows you to be creative with what to do about differences between two XML documents and how
-those differences are reported through the compare() method.
+those differences are reported back to the application through the compare() method.
 
-BETA WARNING more docs needed here. For now, look at the code in XML::SemainticDiff::BasicHandler and the distribution's test
-files for examples. 
+=head1 HANDLER METHODS
+
+The following is a list of handler methods that can be used for your custom diff-handler class.
+
+=head2 init($self, $diff_obj)
+
+The C<init> method is called immediately before the the two document HASHes are compared. The blessed XML::SemanticDiff object
+is passed as the sole argument, so any values that you wish to pass from your application to your custom handler can safely
+be added to the call to XML::SemanticDiff's constructor method.
+
+=head2 rogue_element($self, $element_name, $todoc_element_properties)
+
+The C<rogue_element> method handles those cases where a given element exists in the to-file but not in the from-file.
+
+=head2 missing_element($self, $element_name, $fromdoc_element_properties)
+
+The C<missing_element> method handles those cases where a given element exists in the from-file but not in the to-file.
+
+=head2 element_value($self, $element, $to_element_properties, $fromdoc_element_properties)
+
+The C<element_value> method handles those cases where the text data differs between two elements that have the same name,
+namespace URI, and are at the same location in the document tree. Note that all whitespace is normalized and the text from
+mixed-content elements (those containing both text and child elements mixed together) is aggregated down to a single value.
+
+=head2 namespace_uri($self, $element, $todoc_element_properties, $fromdoc_element_properties)
+
+The C<namespace_uri> method handles case where the XML namespace URI differs between a given element in the two
+documents. Note that the namespace URI is checked, not the element prefixes since <foo:element/> <bar:element/> and <element/> 
+are all considered equivalent as long as they are bound to the same namespace URI.
+ 
+=head2 rogue_attribute($self, $attr_name, $element, $todoc_element_properties)
+
+The C<rogue_attribute> method handles those cases where an attribute exists in a given element the to-file but not in the
+from-file.
+
+=head2 missing_attribute($self, $attr_name, $element, $todoc_element_properties, $from_element_properties)
+
+The C<missing_attribute> method handles those cases where an attribute exists in a given element exists in the from-file but
+not in the to-file.
+
+=head2 attribute_value($self, $attr_name, $element, $todoc_element_properties, $from_element_properties)
+
+The C<attribute_value> method handles those cases where the value of an attribute varies between the same element in both
+documents.
+
+=head2 final($self, $diff_obj)
+
+The C<final> method is called immediately after the two document HASHes are compared. Like the C<init> handler, it is passed a
+copy of the XML::SemanticDiff object as it's sole argument.
 
 Note that if a given method is not implemented in your custom handler class, XML::SemanticDiff will not complain; but it means
 that all of those events will be silently ignored. Consider yourself warned. 
