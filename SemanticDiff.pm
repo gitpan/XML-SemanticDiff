@@ -3,10 +3,9 @@ package XML::SemanticDiff;
 use strict;
 use vars qw/$VERSION/;
 
-$VERSION = '0.93';
+$VERSION = '0.95';
 
 use XML::Parser;
-use Digest::MD5;
 
 sub new {
     my ($proto, %args) = @_;
@@ -115,7 +114,7 @@ sub compare {
             
             delete $to_doc->{$element};
         }
-        else {            
+        else {  
             push (@warnings, $handler->missing_element($element, $from_doc->{$element}))
                       if $handler->can('missing_element');          
         }
@@ -136,7 +135,7 @@ sub compare {
 
 package PathFinder;
 use strict;
-    
+use Digest::MD5  qw(md5_base64);    
 my $descendents = {};
 my $position_index = {};
 my $char_accumulator = {};
@@ -179,13 +178,19 @@ sub EndTag {
          
     $test_context .= '/' . $element . '[' . $position_index->{$element} . ']';
             
-    my $text = delete $char_accumulator->{$element} || "";
+    my $text;
+    if ( defined( $char_accumulator->{$element} )) { 
+        $text = $char_accumulator->{$element};
+        delete $char_accumulator->{$element};
+    }
+    $text ||= 'o';
     
-    my $ctx = Digest::MD5->new;
-    $ctx->add("$text");
-    $doc->{"$test_context"}->{TextChecksum} = $ctx->b64digest;
+#    warn "text is '$text' \n";
+#    my $ctx = Digest::MD5->new;
+#    $ctx->add("$text");
+#    $doc->{"$test_context"}->{TextChecksum} = $ctx->b64digest;
 
-
+    $doc->{"$test_context"}->{TextChecksum} = md5_base64("$text");
     if ($opts->{keepdata}) {
         $doc->{"$test_context"}->{CData} = $text;
     }

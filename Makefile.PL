@@ -5,4 +5,5 @@ WriteMakefile(
     'NAME'	=> 'XML::SemanticDiff',
     'VERSION_FROM' => 'SemanticDiff.pm', # finds $VERSION
     'PREREQ_PM' => {XML::Parser => '0', Digest::MD5 => '0'},
+    'EXE_FILES' => [ 'eg/xmlsemdiff' ],
 );
