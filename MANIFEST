@@ -1,0 +1,13 @@
+Changes
+Makefile.PL
+MANIFEST
+SemanticDiff.pm
+lib/XML/SemanticDiff/BasicHandler.pm
+t/01basic.t
+t/02load_xml.t
+t/03simple_compare.t
+t/04namespaces.t
+t/05simple_handler.t
+t/06pass_to_handler.t
+t/07pitest.t
+
