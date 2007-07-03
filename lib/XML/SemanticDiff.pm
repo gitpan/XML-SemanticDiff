@@ -3,7 +3,7 @@ package XML::SemanticDiff;
 use strict;
 use vars qw/$VERSION/;
 
-$VERSION = '0.95';
+$VERSION = '0.96';
 
 use XML::Parser;
 
@@ -30,6 +30,25 @@ sub read_xml {
     return $doc;
 }
 
+sub _same_namespace
+{
+    my ($self, $to, $from) = @_;
+    
+    my $t_e = exists($to->{NamespaceURI});
+    my $f_e = exists($from->{NamespaceURI});
+    if (!$t_e && !$f_e)
+    {
+        return 1;
+    }
+    elsif ($t_e && $f_e)
+    {
+        return ($to->{NamespaceURI} eq $from->{NamespaceURI});
+    }
+    else
+    {
+        return 0;
+    }
+}
 # Okay, it's pretty basic...
 #
 # We flatten each doc tree to a Perl hash where the keys are "fully qualified" 
@@ -71,7 +90,7 @@ sub compare {
             }
         
             # namespace test
-            unless ($from_doc->{$element}->{NamespaceURI} eq $to_doc->{$element}->{NamespaceURI}) {
+            unless ($self->_same_namespace($from_doc->{$element},$to_doc->{$element})) {
                 push (@warnings, $handler->namespace_uri($element, 
                                                          $to_doc->{$element}, 
                                                          $from_doc->{$element}))
@@ -134,30 +153,58 @@ sub compare {
 1;
 
 package PathFinder;
+
 use strict;
-use Digest::MD5  qw(md5_base64);    
+
+use Digest::MD5  qw(md5_base64);
+
+use Encode qw(encode_utf8);
+
 my $descendents = {};
-my $position_index = {};
 my $char_accumulator = {};
 my $doc = {};
 my $opts = {};
 
+my $xml_context = [];
+
+# The position index for the PI's below - the processing instructions.
+my $PI_position_index = {};
+
 sub StartTag {
     my ($expat, $element) = @_;
+
+
     my %attrs = %_;
             
     my @context = $expat->context;
     my $context_length = scalar (@context);
     my $parent = $context[$context_length -1];
     push (@{$descendents->{$parent}}, $element) if $parent;
-    $position_index->{"$element"}++;
+
+    my $last_ctx_elem = $xml_context->[-1] || { position_index => {}};
+
+    push @{$xml_context}, 
+        {
+            element => "$element", 
+            'index' => ++$last_ctx_elem->{position_index}->{"$element"},
+            position_index => {},
+        };
+
     my $test_context;
  
+=begin Discard
+
+
     if (@context){
         $test_context = '/' . join ('/', map { $_ . '[' . $position_index->{$_} . ']' } @context);
     }   
         
     $test_context .= '/' . $element . '[' . $position_index->{$element} . ']';
+=end
+
+=cut
+
+    $test_context = _calc_test_context();
 
     $doc->{"$test_context"}->{NamespaceURI} = $expat->namespace($element) || "";
     $doc->{"$test_context"}->{Attributes}   = \%attrs || {};
@@ -165,19 +212,31 @@ sub StartTag {
 
 }
 
+sub _calc_test_context
+{
+    return "/" . join("/", map { $_->{'element'} . "[" . $_->{'index'} . "]" } @$xml_context);
+}
+
 sub EndTag {
     my ($expat, $element) = @_;
     
-    
     my @context = $expat->context;
-    my $test_context;
-            
+
+=begin Discard
+
+
     if (@context){
         $test_context = '/' . join ('/', map { $_ . '[' . $position_index->{$_} . ']' } @context);
     }
          
     $test_context .= '/' . $element . '[' . $position_index->{$element} . ']';
-            
+
+=end
+
+=cut
+
+    my $test_context = _calc_test_context();
+
     my $text;
     if ( defined( $char_accumulator->{$element} )) { 
         $text = $char_accumulator->{$element};
@@ -190,7 +249,7 @@ sub EndTag {
 #    $ctx->add("$text");
 #    $doc->{"$test_context"}->{TextChecksum} = $ctx->b64digest;
 
-    $doc->{"$test_context"}->{TextChecksum} = md5_base64("$text");
+    $doc->{"$test_context"}->{TextChecksum} = md5_base64(encode_utf8("$text"));
     if ($opts->{keepdata}) {
         $doc->{"$test_context"}->{CData} = $text;
     }
@@ -200,14 +259,13 @@ sub EndTag {
         my $seen = {};
         foreach my $child (@{$descendents->{$element}}) {
             next if $seen->{$child};
-            # reset the relative counter
-            $position_index->{$child} = 0;
             $seen->{$child}++;
         }
     }
     
     $doc->{"$test_context"}->{TagEnd} = $expat->current_line if $opts->{keeplinenums};
-        
+
+    pop(@$xml_context);
 }
 
 sub Text {
@@ -227,25 +285,27 @@ sub StartDocument {
     my $expat = shift;
     $doc = {};
     $descendents = {};
-    $position_index = {};
     $char_accumulator = {};
-    $opts = $expat->{'Non-Expat-Options'}
+    $opts = $expat->{'Non-Expat-Options'};
+    $xml_context = [];
+    $PI_position_index = {};
 }
         
 sub EndDocument {
     return $doc;
 }
-    
+
+
 sub PI {
     my ($expat, $target, $data) = @_;
     my $attrs = {};
-    $position_index->{$target}++;
+    $PI_position_index->{$target}++;
 
     foreach my $pair (split /\s+/, $data) {
         $attrs->{$1} = $2 if $pair =~ /^(.+?)=["'](.+?)["']$/;
     }
 
-    my $slug = '?' . $target . '[' . $position_index->{$target} . ']';
+    my $slug = '?' . $target . '[' . $PI_position_index->{$target} . ']';
 
     $doc->{$slug}->{Attributes} = $attrs || {};
     $doc->{$slug}->{TextChecksum} = "1";
@@ -385,12 +445,18 @@ that all of those events will be silently ignored. Consider yourself warned.
 
 =head1 AUTHOR
 
-Kip Hampton, khampton@totalcinema.com
+Originally by Kip Hampton, khampton@totalcinema.com .
+
+Further Maintained by Shlomi Fish, shlomif@iglu.org.il .
 
 =head1 COPYRIGHT
 
-Copyright (c) 2000 Kip Hampton. All rights reserved. This program is free software; you can redistribute it and/or modify it 
-under the same terms as Perl itself.
+Copyright (c) 2000 Kip Hampton. All rights reserved. This program is 
+free software; you can redistribute it and/or modify it under the same terms 
+as Perl itself.
+
+Shlomi Fish hereby disclaims any implicit or explicit copyrights on this
+software.
 
 =head1 SEE ALSO
 
