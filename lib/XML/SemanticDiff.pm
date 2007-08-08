@@ -3,7 +3,7 @@ package XML::SemanticDiff;
 use strict;
 use vars qw/$VERSION/;
 
-$VERSION = '0.96';
+$VERSION = '0.97';
 
 use XML::Parser;
 
@@ -18,16 +18,48 @@ sub new {
     return $self;
 }
 
+sub _is_file
+{
+    my ($self, $specifier) = @_;
+    return $specifier !~ /\n/g && -f $specifier;
+}
+
+sub _get_pathfinder_obj {
+    my $self = shift;
+
+    return XML::SemanticDiff::PathFinder::Obj->new();
+}
+
 sub read_xml {
     my $self = shift;
-    my $p = XML::Parser->new( Style => 'Stream',
-                              Pkg   => 'PathFinder',
-                              'Non-Expat-Options' => $self,
-                              Namespaces => 1);
 
-    my $doc = $_[0] !~ /\n/g && -f $_[0] ? $p->parsefile($_[0]) : $p->parse($_[0]);
+    my ($xml_specifier) = @_;
 
-    return $doc;
+    if (ref($xml_specifier) eq 'HASH')
+    {
+        return $xml_specifier;
+    }
+    else
+    {
+        $self->{path_finder_obj} = $self->_get_pathfinder_obj();
+
+        my $p = XML::Parser->new(
+            Style => 'Stream',
+            Pkg   => 'XML::SemanticDiff::PathFinder',
+            'Non-Expat-Options' => $self,
+            Namespaces => 1
+        );
+
+        my $ret =
+            $self->_is_file($xml_specifier)
+                ? $p->parsefile($xml_specifier)
+                : $p->parse($xml_specifier)
+                ;
+        
+        $self->{path_finder_obj} = undef;
+
+        return $ret;
+    }
 }
 
 sub _same_namespace
@@ -64,7 +96,7 @@ sub compare {
     my $self = shift;
     my ($from_xml, $to_xml) = @_;
 
-    my $from_doc = ref($from_xml) eq 'HASH' ? $from_xml : $self->read_xml($from_xml);
+    my $from_doc = $self->read_xml($from_xml);
     my $to_doc = $self->read_xml($to_xml);
 
     my @warnings = ();
@@ -152,7 +184,20 @@ sub compare {
 
 1;
 
-package PathFinder;
+package XML::SemanticDiff::PathFinder;
+
+foreach my $func (qw(StartTag EndTag Text StartDocument EndDocument PI))
+{
+    no strict 'refs';
+    *{__PACKAGE__.'::'.$func} = sub {
+        my $expat = shift;
+        return $expat->{'Non-Expat-Options'}->{path_finder_obj}->$func(
+            $expat, @_
+        );
+    };
+}
+
+package XML::SemanticDiff::PathFinder::Obj;
 
 use strict;
 
@@ -160,18 +205,41 @@ use Digest::MD5  qw(md5_base64);
 
 use Encode qw(encode_utf8);
 
-my $descendents = {};
-my $char_accumulator = {};
-my $doc = {};
-my $opts = {};
+foreach my $accessor (qw(descendents char_accumulator doc
+    opts xml_context PI_position_index))
+{
+    no strict 'refs';
+    *{__PACKAGE__.'::'.$accessor} = sub {
+        my $self = shift;
 
-my $xml_context = [];
+        if (@_)
+        {
+            $self->{$accessor} = shift;
+        }
+        return $self->{$accessor};
+    };
+}
 
-# The position index for the PI's below - the processing instructions.
-my $PI_position_index = {};
+# PI_position_index is the position index for the PI's below - the processing 
+# instructions.
+
+sub new {
+    my $class = shift;
+
+    my $self = {};
+    bless $self, $class;
+
+    $self->_init(@_);
+
+    return $self;
+}
+
+sub _init {
+    return 0;
+}
 
 sub StartTag {
-    my ($expat, $element) = @_;
+    my ($self, $expat, $element) = @_;
 
 
     my %attrs = %_;
@@ -179,11 +247,11 @@ sub StartTag {
     my @context = $expat->context;
     my $context_length = scalar (@context);
     my $parent = $context[$context_length -1];
-    push (@{$descendents->{$parent}}, $element) if $parent;
+    push (@{$self->descendents()->{$parent}}, $element) if $parent;
 
-    my $last_ctx_elem = $xml_context->[-1] || { position_index => {}};
+    my $last_ctx_elem = $self->xml_context()->[-1] || { position_index => {}};
 
-    push @{$xml_context}, 
+    push @{$self->xml_context()}, 
         {
             element => "$element", 
             'index' => ++$last_ctx_elem->{position_index}->{"$element"},
@@ -204,21 +272,32 @@ sub StartTag {
 
 =cut
 
-    $test_context = _calc_test_context();
+    $test_context = $self->_calc_test_context();
 
-    $doc->{"$test_context"}->{NamespaceURI} = $expat->namespace($element) || "";
-    $doc->{"$test_context"}->{Attributes}   = \%attrs || {};
-    $doc->{"$test_context"}->{TagStart}     = $expat->current_line if $opts->{keeplinenums};
-
+    $self->doc()->{$test_context} = 
+    {
+        NamespaceURI => ($expat->namespace($element) || ""),
+        Attributes   => \%attrs,
+        ($self->opts()->{keeplinenums}
+            ? ( TagStart => $expat->current_line) 
+            : ()
+        ),
+    };
 }
 
 sub _calc_test_context
 {
-    return "/" . join("/", map { $_->{'element'} . "[" . $_->{'index'} . "]" } @$xml_context);
+    my $self = shift;
+
+    return 
+        join("", 
+            map { "/". $_->{'element'} . "[" . $_->{'index'} . "]" } 
+            @{$self->xml_context()}
+        );
 }
 
 sub EndTag {
-    my ($expat, $element) = @_;
+    my ($self, $expat, $element) = @_;
     
     my @context = $expat->context;
 
@@ -231,44 +310,45 @@ sub EndTag {
          
     $test_context .= '/' . $element . '[' . $position_index->{$element} . ']';
 
-=end
+=end Discard
 
 =cut
 
-    my $test_context = _calc_test_context();
+    my $test_context = $self->_calc_test_context();
 
     my $text;
-    if ( defined( $char_accumulator->{$element} )) { 
-        $text = $char_accumulator->{$element};
-        delete $char_accumulator->{$element};
+    if ( defined( $self->char_accumulator()->{$element} )) { 
+        $text = $self->char_accumulator()->{$element};
+        delete $self->char_accumulator()->{$element};
     }
     $text ||= 'o';
     
 #    warn "text is '$text' \n";
 #    my $ctx = Digest::MD5->new;
 #    $ctx->add("$text");
-#    $doc->{"$test_context"}->{TextChecksum} = $ctx->b64digest;
+#    $self->doc()->{"$test_context"}->{TextChecksum} = $ctx->b64digest;
 
-    $doc->{"$test_context"}->{TextChecksum} = md5_base64(encode_utf8("$text"));
-    if ($opts->{keepdata}) {
-        $doc->{"$test_context"}->{CData} = $text;
+    $self->doc()->{"$test_context"}->{TextChecksum} = md5_base64(encode_utf8("$text"));
+    if ($self->opts()->{keepdata}) {
+        $self->doc()->{"$test_context"}->{CData} = $text;
     }
     
     
-    if (defined ( $descendents->{$element})) {
+    if (defined ( $self->descendents()->{$element})) {
         my $seen = {};
-        foreach my $child (@{$descendents->{$element}}) {
+        foreach my $child (@{$self->descendents()->{$element}}) {
             next if $seen->{$child};
             $seen->{$child}++;
         }
     }
     
-    $doc->{"$test_context"}->{TagEnd} = $expat->current_line if $opts->{keeplinenums};
+    $self->doc()->{"$test_context"}->{TagEnd} = $expat->current_line if $self->opts()->{keeplinenums};
 
-    pop(@$xml_context);
+    pop(@{$self->xml_context()});
 }
 
 sub Text {
+    my $self = shift;
     my $expat = shift;
     
     my $element = $expat->current_element;
@@ -277,42 +357,52 @@ sub Text {
     $char =~ s/^\s*//;
     $char =~ s/\s*$//;
     $char =~ s/\s+/ /g;
-    $char_accumulator->{$element} .= $char if $char;
+    $self->char_accumulator()->{$element} .= $char if $char;
     
 }
         
 sub StartDocument {
+    my $self = shift;
     my $expat = shift;
-    $doc = {};
-    $descendents = {};
-    $char_accumulator = {};
-    $opts = $expat->{'Non-Expat-Options'};
-    $xml_context = [];
-    $PI_position_index = {};
+    $self->doc({});
+    $self->descendents({});
+    $self->char_accumulator({});
+    $self->opts($expat->{'Non-Expat-Options'});
+    $self->xml_context([]);
+    $self->PI_position_index({});
 }
         
 sub EndDocument {
-    return $doc;
+    my $self = shift;
+
+    return $self->doc();
 }
 
 
 sub PI {
-    my ($expat, $target, $data) = @_;
+    my ($self, $expat, $target, $data) = @_;
     my $attrs = {};
-    $PI_position_index->{$target}++;
+    $self->PI_position_index()->{$target}++;
 
     foreach my $pair (split /\s+/, $data) {
         $attrs->{$1} = $2 if $pair =~ /^(.+?)=["'](.+?)["']$/;
     }
 
-    my $slug = '?' . $target . '[' . $PI_position_index->{$target} . ']';
+    my $slug = '?' . $target . '[' . $self->PI_position_index()->{$target} . ']';
 
-    $doc->{$slug}->{Attributes} = $attrs || {};
-    $doc->{$slug}->{TextChecksum} = "1";
-    $doc->{$slug}->{NamespaceURI} = "";
-    $doc->{$slug}->{TagStart} = $expat->current_line if $opts->{keeplinenums};
-    $doc->{$slug}->{TagEnd} = $expat->current_line if $opts->{keeplinenums};
-
+    $self->doc()->{$slug} =
+        {
+            Attributes => ($attrs || {}),
+            TextChecksum => "1",
+            NamespaceURI => "", 
+            ( $self->opts()->{keeplinenums} 
+            ? (
+                TagStart => $expat->current_line(),
+                TagEnd => $expat->current_line(),
+              )
+            : ()
+            ),
+        };
 }   
 
 1;
@@ -379,6 +469,32 @@ custom handler class.
 Please see the section on 'CUSTOM HANDLERS' below.
 
 =back
+
+=head2 @results = $differ->compare($xml1, $xml2)
+
+Compares the XMLs $xml1 and $xml2 . $xml1 and $xml2 can be:
+
+=over 4
+
+=item * filenames
+
+This will be considered if it is a string that does not contain newlines and 
+exists in the filesystem.
+
+=item * the XML text itself.
+
+This will be considered if it's any kind of string.
+
+=item * the results of read_xml(). (see below)
+
+This will be considered if it's a hash reference.
+
+=back
+
+=head2 my $doc = read_xml($xml_location)
+
+This will read the XML, process it for comparison and return it. See compare()
+for how it is determined.
 
 =head1 CUSTOM HANDLERS
 
