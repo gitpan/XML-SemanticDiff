@@ -12,10 +12,16 @@ my $builder = Module::Build->new(
     {
         'Encode' => '0',
         'Digest::MD5' => '0',
+        'perl' => '5.006',
         'XML::Parser' => '0',
     },
     add_to_cleanup      => [ 'XML-SemanticDiff-*' ],
     create_makefile_pl => 'traditional',
+    meta_add => {
+        resources => {
+            Repository => "http://svn.berlios.de/svnroot/repos/web-cpan/XML-SemanticDiff/",
+        },
+    },
 );
 
 $builder->create_build_script();

@@ -2,15 +2,15 @@
 use ExtUtils::MakeMaker;
 WriteMakefile
 (
-          'PL_FILES' => {},
-          'INSTALLDIRS' => 'site',
           'NAME' => 'XML::SemanticDiff',
-          'EXE_FILES' => [],
           'VERSION_FROM' => 'lib/XML/SemanticDiff.pm',
           'PREREQ_PM' => {
                            'Digest::MD5' => '0',
-                           'XML::Parser' => '0',
-                           'Encode' => '0'
-                         }
+                           'Encode' => '0',
+                           'XML::Parser' => '0'
+                         },
+          'INSTALLDIRS' => 'site',
+          'EXE_FILES' => [],
+          'PL_FILES' => {}
         )
 ;

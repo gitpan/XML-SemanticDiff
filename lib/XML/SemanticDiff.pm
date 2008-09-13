@@ -1,9 +1,11 @@
 package XML::SemanticDiff;
 
 use strict;
+use warnings;
+
 use vars qw/$VERSION/;
 
-$VERSION = '0.97';
+$VERSION = '0.98';
 
 use XML::Parser;
 
@@ -573,6 +575,11 @@ as Perl itself.
 
 Shlomi Fish hereby disclaims any implicit or explicit copyrights on this
 software.
+
+=head1 LICENSE
+
+This program is free software; you can redistribute it and/or modify it under 
+the same terms as Perl itself.
 
 =head1 SEE ALSO
 
