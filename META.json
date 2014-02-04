@@ -31,11 +31,11 @@
    "provides" : {
       "XML::SemanticDiff" : {
          "file" : "lib/XML/SemanticDiff.pm",
-         "version" : "1.0003"
+         "version" : "1.0004"
       },
       "XML::SemanticDiff::BasicHandler" : {
          "file" : "lib/XML/SemanticDiff/BasicHandler.pm",
-         "version" : "1.0003"
+         "version" : "1.0004"
       },
       "XML::SemanticDiff::PathFinder" : {
          "file" : "lib/XML/SemanticDiff.pm"
@@ -50,5 +50,5 @@
          "url" : "https://bitbucket.org/shlomif/perl-xml-semanticdiff"
       }
    },
-   "version" : "1.0003"
+   "version" : "1.0004"
 }
